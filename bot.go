@@ -3,83 +3,98 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/creasty/defaults"
 	"github.com/go-redis/redis/v8"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
-	"gopkg.in/yaml.v2"
 	"log"
-	"os"
 	"strconv"
 )
 
 var ctx = context.Background()
+var bot *tgbotapi.BotAPI
+var rdb *redis.Client
 
-type Config struct {
-	Bot struct {
-		Token string `yaml:"token"`
-	} `yaml:"bot"`
-
-	Redis struct {
-		Address string `default:"localhost:6379" yaml:"address"`
-		Password string `default:"" yaml:"password"`
-		Database int `default:"0" yaml:"database"`
-	}
+type BotConfig struct {
+	Token string
+	Debug bool
 }
 
-func getKeyboardMarkup(likesCount int) tgbotapi.InlineKeyboardMarkup {
+type RedisConfig struct {
+	Address  string
+	Password string
+	Database int
+}
+
+type Config struct {
+	Bot BotConfig
+	Redis RedisConfig
+}
+
+
+func getKeyboardMarkup(likesCount int64) tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("%d 😂", likesCount), strconv.Itoa(likesCount)),
+			tgbotapi.NewInlineKeyboardButtonData(
+				fmt.Sprintf("%d 😂", likesCount),
+				strconv.FormatInt(likesCount, 10),
+			),
 		),
 	)
 }
 
-func parseConfig() (*Config, error) {
-	f, err := os.Open("config.yml")
+func getLikeButtonMarkup(ChatId int64, MessageID int, likesCount int64) tgbotapi.EditMessageReplyMarkupConfig {
+	return tgbotapi.NewEditMessageReplyMarkup(
+		ChatId,
+		MessageID,
+		getKeyboardMarkup(likesCount),
+	)
+}
+
+func sendLikeButtonMarkup(bot tgbotapi.BotAPI, ChatId int64, MessageID int, likesCount int64) {
+	_, err := bot.Send(getLikeButtonMarkup(
+		ChatId,
+		MessageID,
+		likesCount,
+	))
 
 	if err != nil {
-		return nil, err
+		log.Println(err.Error())
+	}
+}
+
+func incLikesCount(messageId int) int64 {
+	key := strconv.Itoa(messageId)
+
+	likesCount, err := rdb.Incr(ctx, key).Result()
+
+	if err != nil {
+		log.Printf("String to int convert failed %s", err.Error())
+
+		likesCount = 0
 	}
 
-	defer f.Close()
-
-	cfg := &Config{}
-
-	if err := defaults.Set(cfg); err != nil {
-		return nil, err
-	}
-
-	if err := yaml.NewDecoder(f).Decode(&cfg); err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
+	return likesCount
 }
 
 func main() {
-	config, err := parseConfig()
-
-	if err != nil {
-		log.Fatalf("Error while reading config: %s", err.Error())
-	}
-
 	if config.Bot.Token == "" {
-		log.Fatalf("bot.token is required in config!")
+		log.Fatalln("bot.token is required in config!")
 	}
 
-	bot, err := tgbotapi.NewBotAPI(config.Bot.Token)
+	var err error
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr: config.Redis.Address,
-		Password: config.Redis.Password, // no password set
-		DB:       config.Redis.Database,  // use default DB
-	})
+	bot, err = tgbotapi.NewBotAPI(config.Bot.Token)
 
 	if err != nil {
 		log.Panic(err)
 	}
 
-	bot.Debug = true
+	rdb = redis.NewClient(&redis.Options{
+		Addr:     config.Redis.Address,
+		Password: config.Redis.Password,
+		DB:       config.Redis.Database,
+	})
+
+	bot.Debug = config.Bot.Debug
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
@@ -90,33 +105,21 @@ func main() {
 
 	for update := range updates {
 		if update.CallbackQuery != nil {
-			key := strconv.Itoa(update.CallbackQuery.Message.MessageID)
-
-			likesCount, err := rdb.Incr(ctx, key).Result()
-
-			if err != nil {
-				log.Printf("String to int convert failed %s", err.Error())
-
-				likesCount = 0
-			}
-
-			replyMarkup := tgbotapi.NewEditMessageReplyMarkup(
+			sendLikeButtonMarkup(
+				*bot,
 				update.CallbackQuery.Message.Chat.ID,
 				update.CallbackQuery.Message.MessageID,
-				getKeyboardMarkup(int(likesCount)),
+				incLikesCount(update.CallbackQuery.Message.MessageID),
 			)
-
-			bot.Send(replyMarkup)
 		}
 
 		if update.ChannelPost != nil {
-			replyMarkup := tgbotapi.NewEditMessageReplyMarkup(
+			sendLikeButtonMarkup(
+				*bot,
 				update.ChannelPost.Chat.ID,
 				update.ChannelPost.MessageID,
-				getKeyboardMarkup(0),
+				0,
 			)
-
-			bot.Send(replyMarkup)
 		}
 	}
 }
