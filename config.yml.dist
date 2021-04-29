@@ -1,0 +1,7 @@
+bot:
+  token: ""
+  debug: true
+redis:
+  address: "redis:6379"
+  password: ""
+  database: 0

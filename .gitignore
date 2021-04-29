@@ -1,3 +1,4 @@
 .idea
-config.go
+.data
+config.yml
 go_like_bot

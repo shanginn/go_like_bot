@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/creasty/defaults"
 	"github.com/go-redis/redis/v8"
 	"github.com/go-telegram-bot-api/telegram-bot-api"
+	"gopkg.in/yaml.v2"
 	"log"
+	"os"
 	"strconv"
 )
 
@@ -13,22 +16,40 @@ var ctx = context.Background()
 var bot *tgbotapi.BotAPI
 var rdb *redis.Client
 
-type BotConfig struct {
-	Token string
-	Debug bool
-}
-
-type RedisConfig struct {
-	Address  string
-	Password string
-	Database int
-}
-
 type Config struct {
-	Bot BotConfig
-	Redis RedisConfig
+	Bot struct {
+		Token string `yaml:"token"`
+		Debug bool `default:"false" yaml:"debug"`
+	} `yaml:"bot"`
+
+	Redis struct {
+		Address string `default:"localhost:6379" yaml:"address"`
+		Password string `default:"" yaml:"password"`
+		Database int `default:"0" yaml:"database"`
+	}
 }
 
+func parseConfig() (*Config, error) {
+	f, err := os.Open("config.yml")
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer f.Close()
+
+	cfg := &Config{}
+
+	if err := defaults.Set(cfg); err != nil {
+		return nil, err
+	}
+
+	if err := yaml.NewDecoder(f).Decode(&cfg); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
 
 func getKeyboardMarkup(likesCount int64) tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(
@@ -76,11 +97,15 @@ func incLikesCount(messageId int) int64 {
 }
 
 func main() {
+	config, err := parseConfig()
+
+	if err != nil {
+		log.Fatalf("Error while reading config: %s", err.Error())
+	}
+
 	if config.Bot.Token == "" {
 		log.Fatalln("bot.token is required in config!")
 	}
-
-	var err error
 
 	bot, err = tgbotapi.NewBotAPI(config.Bot.Token)
 

@@ -1,0 +1,11 @@
+version: "3.9"
+services:
+  bot:
+    build: .
+    depends_on:
+      - redis
+  redis:
+    image: "redis:alpine"
+    entrypoint: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./.data/redis:/data:delegated
