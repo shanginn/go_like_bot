@@ -2,5 +2,6 @@
 .data
 config.yml
 go_like_bot
+*.pem
 
 !.data/config.yml.dist

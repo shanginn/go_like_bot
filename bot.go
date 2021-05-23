@@ -8,9 +8,9 @@ import (
 	"github.com/go-telegram-bot-api/telegram-bot-api"
 	"gopkg.in/yaml.v2"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
-	"net/http"
 )
 
 var ctx = context.Background()
@@ -128,9 +128,9 @@ func main() {
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
-	_, err = bot.SetWebhook(tgbotapi.NewWebhookWithCert(
-		"https://" + config.Bot.Domain + ":" + config.Bot.Port + "/"+bot.Token,
-		config.Bot.CertPath,
+	_, err = bot.SetWebhook(tgbotapi.NewWebhook(
+		"https://" + config.Bot.Domain + ":" + config.Bot.Port + "/" + bot.Token,
+
 	))
 
 	if err != nil {
@@ -148,7 +148,7 @@ func main() {
 
 	updates := bot.ListenForWebhook("/" + bot.Token)
 	go http.ListenAndServeTLS(
-		config.Bot.Domain + ":" + config.Bot.Port,
+		"0.0.0.0:" + config.Bot.Port,
 		config.Bot.CertPath,
 		config.Bot.KeyPath,
 		nil,
