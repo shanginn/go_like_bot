@@ -6,9 +6,10 @@ services:
     depends_on:
       - redis
     volumes:
-      - /etc/letsencrypt/live/:/data/letsencrypt:delegated
       - ./.data/config.yml:/data/config.yml:delegated
     restart: always
+    ports:
+      - "8443:8443"
   redis:
     image: "redis:alpine"
     entrypoint: ["redis-server", "--appendonly", "yes"]
