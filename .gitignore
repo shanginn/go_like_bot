@@ -2,3 +2,5 @@
 .data
 config.yml
 go_like_bot
+
+!.data/config.yml.dist

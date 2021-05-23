@@ -35,7 +35,7 @@ type Config struct {
 }
 
 func parseConfig() (*Config, error) {
-	f, err := os.Open("config.yml")
+	f, err := os.Open("/data/config.yml")
 
 	if err != nil {
 		return nil, err
