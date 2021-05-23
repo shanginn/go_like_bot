@@ -1,6 +1,10 @@
 bot:
   token: ""
   debug: true
+  domain: 
+  port: 8443
+  certPath: cert.pem
+  keyPath: privkey.pem
 redis:
   address: "redis:6379"
   password: ""

@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"net/http"
 )
 
 var ctx = context.Background()
@@ -20,6 +21,10 @@ type Config struct {
 	Bot struct {
 		Token string `yaml:"token"`
 		Debug bool `default:"false" yaml:"debug"`
+		Domain string `yaml:"domain"`
+		Port string `yaml:"port"`
+		CertPath string `yaml:"certPath"`
+		KeyPath string `yaml:"keyPath"`
 	} `yaml:"bot"`
 
 	Redis struct {
@@ -123,28 +128,58 @@ func main() {
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
+	_, err = bot.SetWebhook(tgbotapi.NewWebhookWithCert(
+		"https://" + config.Bot.Domain + ":" + config.Bot.Port + "/"+bot.Token,
+		config.Bot.CertPath,
+	))
 
-	updates, err := bot.GetUpdatesChan(u)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	info, err := bot.GetWebhookInfo()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if info.LastErrorDate != 0 {
+		log.Printf("Telegram callback failed: %s", info.LastErrorMessage)
+	}
+
+	updates := bot.ListenForWebhook("/" + bot.Token)
+	go http.ListenAndServeTLS(
+		config.Bot.Domain + ":" + config.Bot.Port,
+		config.Bot.CertPath,
+		config.Bot.KeyPath,
+		nil,
+	)
 
 	for update := range updates {
-		if update.CallbackQuery != nil {
-			sendLikeButtonMarkup(
-				*bot,
-				update.CallbackQuery.Message.Chat.ID,
-				update.CallbackQuery.Message.MessageID,
-				incLikesCount(update.CallbackQuery.Message.MessageID),
-			)
-		}
-
-		if update.ChannelPost != nil {
-			sendLikeButtonMarkup(
-				*bot,
-				update.ChannelPost.Chat.ID,
-				update.ChannelPost.MessageID,
-				0,
-			)
-		}
+		log.Printf("%+v\n", update)
 	}
+
+	// u := tgbotapi.NewUpdate(0)
+	// u.Timeout = 60
+
+	// updates, err := bot.GetUpdatesChan(u)
+
+	// for update := range updates {
+	// 	if update.CallbackQuery != nil {
+	// 		sendLikeButtonMarkup(
+	// 			*bot,
+	// 			update.CallbackQuery.Message.Chat.ID,
+	// 			update.CallbackQuery.Message.MessageID,
+	// 			incLikesCount(update.CallbackQuery.Message.MessageID),
+	// 		)
+	// 	}
+
+	// 	if update.ChannelPost != nil {
+	// 		sendLikeButtonMarkup(
+	// 			*bot,
+	// 			update.ChannelPost.Chat.ID,
+	// 			update.ChannelPost.MessageID,
+	// 			0,
+	// 		)
+	// 	}
+	// }
 }
