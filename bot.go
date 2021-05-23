@@ -155,31 +155,22 @@ func main() {
 	)
 
 	for update := range updates {
-		log.Printf("%+v\n", update)
+		if update.CallbackQuery != nil {
+			sendLikeButtonMarkup(
+				*bot,
+				update.CallbackQuery.Message.Chat.ID,
+				update.CallbackQuery.Message.MessageID,
+				incLikesCount(update.CallbackQuery.Message.MessageID),
+			)
+		}
+
+		if update.ChannelPost != nil {
+			sendLikeButtonMarkup(
+				*bot,
+				update.ChannelPost.Chat.ID,
+				update.ChannelPost.MessageID,
+				0,
+			)
+		}
 	}
-
-	// u := tgbotapi.NewUpdate(0)
-	// u.Timeout = 60
-
-	// updates, err := bot.GetUpdatesChan(u)
-
-	// for update := range updates {
-	// 	if update.CallbackQuery != nil {
-	// 		sendLikeButtonMarkup(
-	// 			*bot,
-	// 			update.CallbackQuery.Message.Chat.ID,
-	// 			update.CallbackQuery.Message.MessageID,
-	// 			incLikesCount(update.CallbackQuery.Message.MessageID),
-	// 		)
-	// 	}
-
-	// 	if update.ChannelPost != nil {
-	// 		sendLikeButtonMarkup(
-	// 			*bot,
-	// 			update.ChannelPost.Chat.ID,
-	// 			update.ChannelPost.MessageID,
-	// 			0,
-	// 		)
-	// 	}
-	// }
 }
