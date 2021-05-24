@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"time"
 )
 
 var ctx = context.Background()
@@ -161,8 +160,6 @@ func main() {
 	log.Print("Server is started")
 
 	for update := range updates {
-		time.Sleep(1 * time.Second)
-
 		if update.CallbackQuery != nil {
 			sendLikeButtonMarkup(
 				*bot,
