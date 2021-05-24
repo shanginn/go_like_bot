@@ -9,8 +9,10 @@ import (
 	"gopkg.in/yaml.v2"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
+	"time"
 )
 
 var ctx = context.Background()
@@ -128,10 +130,12 @@ func main() {
 
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
-	_, err = bot.SetWebhook(tgbotapi.NewWebhook(
-		"https://" + config.Bot.Domain + ":" + config.Bot.Port + "/" + bot.Token,
+	u, _ := url.Parse("https://" + config.Bot.Domain + ":" + config.Bot.Port + "/" + bot.Token)
 
-	))
+	_, err = bot.SetWebhook(tgbotapi.WebhookConfig{
+		URL: u,
+		MaxConnections: 100,
+	})
 
 	if err != nil {
 		log.Fatal(err)
@@ -154,7 +158,11 @@ func main() {
 		nil,
 	)
 
+	log.Print("Server is started")
+
 	for update := range updates {
+		time.Sleep(1 * time.Second)
+
 		if update.CallbackQuery != nil {
 			sendLikeButtonMarkup(
 				*bot,
