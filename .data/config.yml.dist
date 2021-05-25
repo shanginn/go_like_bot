@@ -1,0 +1,14 @@
+webhookBot:
+  token: "0123456789:CCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAA"
+  debug: true
+  domain: 
+  port: 8443
+  certPath: /data/letsencrypt/cert.pem
+  keyPath: /data/letsencrypt/privkey.pem
+updateBotsTokens:
+	- "0000000000:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	- "0000000001:BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+redis:
+  address: "redis:6379"
+  password: ""
+  database: 0

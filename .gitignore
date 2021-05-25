@@ -1,7 +1,6 @@
 .idea
-.data
+.data/*
+!.data/config.yml.dist
 config.yml
 go_like_bot
 *.pem
-
-!.data/config.yml.dist
