@@ -95,8 +95,6 @@ func getLikeButtonMarkup(ChatId int64, MessageID int, likesCount int64) tgbotapi
 }
 
 func sendLikeButtonMarkup(bot tgbotapi.BotAPI, ChatId int64, MessageID int, likesCount int64) {
-	log.Printf("sendLikeButtonMarkup: %s %s %s", ChatId, MessageID, likesCount)
-
 	_, err := bot.Send(getLikeButtonMarkup(
 		ChatId,
 		MessageID,
