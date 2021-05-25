@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/creasty/defaults"
 	"github.com/go-redis/redis/v8"
@@ -12,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"sync/atomic"
 )
 
 var ctx = context.Background()
@@ -28,11 +30,26 @@ type Config struct {
 		KeyPath string `yaml:"keyPath"`
 	} `yaml:"bot"`
 
+	UpdateBotsTokens []string `yaml:"updateBotsTokens"`
+
 	Redis struct {
 		Address string `default:"localhost:6379" yaml:"address"`
 		Password string `default:"" yaml:"password"`
 		Database int `default:"0" yaml:"database"`
-	}
+	} `yaml:"redis"`
+}
+
+type UpdateBots struct {
+	bots []*tgbotapi.BotAPI
+	current  uint64
+}
+
+func (s *UpdateBots) nextIndex() int {
+	return int(atomic.AddUint64(&s.current, uint64(1)) % uint64(len(s.bots)))
+}
+
+func (s *UpdateBots) getNextBot() *tgbotapi.BotAPI {
+	return s.bots[s.nextIndex()]
 }
 
 func parseConfig() (*Config, error) {
@@ -52,6 +69,10 @@ func parseConfig() (*Config, error) {
 
 	if err := yaml.NewDecoder(f).Decode(&cfg); err != nil {
 		return nil, err
+	}
+
+	if cfg.Bot.Token == "" {
+		return nil, errors.New("bot.token is required in config")
 	}
 
 	return cfg, nil
@@ -102,6 +123,52 @@ func incLikesCount(messageId int) int64 {
 	return likesCount
 }
 
+func setupRedis(config *Config) *redis.Client {
+	return redis.NewClient(&redis.Options {
+		Addr:     config.Redis.Address,
+		Password: config.Redis.Password,
+		DB:       config.Redis.Database,
+	})
+}
+
+func loginBot(token string, debug bool) *tgbotapi.BotAPI {
+	bot, err := tgbotapi.NewBotAPI(token)
+
+	if err != nil {
+		log.Panic(err)
+	}
+
+	bot.Debug = debug
+
+	log.Printf("Authorized on account %s", bot.Self.UserName)
+
+	return bot
+}
+
+func setupWebhook(config *Config, bot *tgbotapi.BotAPI) (tgbotapi.UpdatesChannel, error) {
+	u, _ := url.Parse("https://" + config.Bot.Domain + ":" + config.Bot.Port + "/" + bot.Token)
+
+	_, err := bot.SetWebhook(tgbotapi.WebhookConfig{
+		URL: u,
+		MaxConnections: 100,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := bot.GetWebhookInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	if info.LastErrorDate != 0 {
+		log.Printf("Last time telegram callback failed: %s", info.LastErrorMessage)
+	}
+
+	return bot.ListenForWebhook("/" + bot.Token), nil
+}
+
 func main() {
 	config, err := parseConfig()
 
@@ -109,60 +176,39 @@ func main() {
 		log.Fatalf("Error while reading config: %s", err.Error())
 	}
 
-	if config.Bot.Token == "" {
-		log.Fatalln("bot.token is required in config!")
-	}
-
-	bot, err = tgbotapi.NewBotAPI(config.Bot.Token)
+	bot = loginBot(config.Bot.Token, config.Bot.Debug)
+	rdb = setupRedis(config)
+	updates, err := setupWebhook(config, bot)
 
 	if err != nil {
-		log.Panic(err)
+		log.Fatalf("Error setup webhook: %s", err.Error())
 	}
 
-	rdb = redis.NewClient(&redis.Options{
-		Addr:     config.Redis.Address,
-		Password: config.Redis.Password,
-		DB:       config.Redis.Database,
-	})
+	go func() {
+		err := http.ListenAndServeTLS(
+			"0.0.0.0:"+config.Bot.Port,
+			config.Bot.CertPath,
+			config.Bot.KeyPath,
+			nil,
+		)
 
-	bot.Debug = config.Bot.Debug
-
-	log.Printf("Authorized on account %s", bot.Self.UserName)
-
-	u, _ := url.Parse("https://" + config.Bot.Domain + ":" + config.Bot.Port + "/" + bot.Token)
-
-	_, err = bot.SetWebhook(tgbotapi.WebhookConfig{
-		URL: u,
-		MaxConnections: 100,
-	})
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	info, err := bot.GetWebhookInfo()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if info.LastErrorDate != 0 {
-		log.Printf("Telegram callback failed: %s", info.LastErrorMessage)
-	}
-
-	updates := bot.ListenForWebhook("/" + bot.Token)
-	go http.ListenAndServeTLS(
-		"0.0.0.0:" + config.Bot.Port,
-		config.Bot.CertPath,
-		config.Bot.KeyPath,
-		nil,
-	)
+		if err != nil {
+			log.Fatalf("Failed to start web server: %s", err.Error())
+		}
+	}()
 
 	log.Print("Server is started")
+
+	var updateBots UpdateBots
+
+	for _, token := range config.UpdateBotsTokens {
+		updateBots.bots = append(updateBots.bots, loginBot(token, config.Bot.Debug))
+	}
 
 	for update := range updates {
 		if update.CallbackQuery != nil {
 			sendLikeButtonMarkup(
-				*bot,
+				*updateBots.getNextBot(),
 				update.CallbackQuery.Message.Chat.ID,
 				update.CallbackQuery.Message.MessageID,
 				incLikesCount(update.CallbackQuery.Message.MessageID),
