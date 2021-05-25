@@ -44,12 +44,9 @@ type UpdateBots struct {
 	current  uint64
 }
 
-func (s *UpdateBots) nextIndex() int {
-	return int(atomic.AddUint64(&s.current, uint64(1)) % uint64(len(s.bots)))
-}
-
 func (s *UpdateBots) getNextBot() *tgbotapi.BotAPI {
-	return s.bots[s.nextIndex()]
+	nextIndex := int(atomic.AddUint64(&s.current, uint64(1)) % uint64(len(s.bots)))
+	return s.bots[nextIndex]
 }
 
 func parseConfig() (*Config, error) {
@@ -98,6 +95,8 @@ func getLikeButtonMarkup(ChatId int64, MessageID int, likesCount int64) tgbotapi
 }
 
 func sendLikeButtonMarkup(bot tgbotapi.BotAPI, ChatId int64, MessageID int, likesCount int64) {
+	log.Printf("sendLikeButtonMarkup: %s %s %s", ChatId, MessageID, likesCount)
+
 	_, err := bot.Send(getLikeButtonMarkup(
 		ChatId,
 		MessageID,
@@ -192,11 +191,11 @@ func main() {
 			nil,
 		)
 
+		log.Print("Starting server...")
+
 		if err != nil {
 			log.Fatalf("Failed to start web server: %s", err.Error())
 		}
-
-		log.Print("Server is started")
 	}()
 
 	var updateBots UpdateBots
