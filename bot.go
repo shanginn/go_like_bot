@@ -195,9 +195,9 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to start web server: %s", err.Error())
 		}
-	}()
 
-	log.Print("Server is started")
+		log.Print("Server is started")
+	}()
 
 	var updateBots UpdateBots
 
